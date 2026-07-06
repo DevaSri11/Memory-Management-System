@@ -1,0 +1,14 @@
+# Compiled binary files
+build/
+bin/
+obj/
+out/
+.vs/
+
+# Executables
+*.exe
+*.o
+*.obj
+*.pdb
+*.suo
+*.user

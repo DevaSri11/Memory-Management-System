@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Performance C++ Memory Allocator Visualizer</title>
+    <!-- Google Fonts Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-tab="arena-sim">
+                    <i class="fa-solid fa-server"></i> Arena Simulator
+                </button>
+                <button class="nav-item" data-tab="pool-sim">
+                    <i class="fa-solid fa-cubes"></i> Pool Simulator
+                </button>
+                <button class="nav-item" data-tab="benchmarks">
+                    <i class="fa-solid fa-gauge-high"></i> Performance Bench
+                </button>
+                <button class="nav-item" data-tab="code-view">
+                    <i class="fa-solid fa-code"></i> C++ Source Code
+                </button>
+                <button class="nav-item" data-tab="sandbox">
+                    <i class="fa-solid fa-flask"></i> C++ Sandbox
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="compiler-badge">
+                    <i class="fa-solid fa-gears"></i>
+                    <div>
+                        <strong>GCC 16.1.0</strong>
+                        <span>C++20 Native</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="header-title">
+                    <h2 id="current-tab-title">Arena Allocator Visualizer</h2>
+                    <p id="current-tab-desc">Simulate bump allocation and dynamic alignment padding in real time.</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" id="global-reset-btn">
+                        <i class="fa-solid fa-rotate-left"></i> Reset Lab
+                    </button>
+                </div>
+            </header>
+
+            <!-- Tab: Arena Simulator -->
+            <section class="tab-panel active" id="arena-sim-panel">
+                <div class="grid-layout">
+                    <!-- Config & Controls -->
+                    <div class="panel glass-panel control-panel">
+                        <h3><i class="fa-solid fa-sliders"></i> Simulator Configuration</h3>
+                        <div class="control-group">
+                            <label for="arena-buffer-size">Total Buffer Size (Bytes)</label>
+                            <input type="number" id="arena-buffer-size" value="256" min="64" max="1024" step="64">
+                        </div>
+                        
+                        <hr>
+                        
+                        <h3><i class="fa-solid fa-square-plus"></i> Allocate Memory</h3>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="arena-alloc-size">Size (Bytes)</label>
+                                <input type="number" id="arena-alloc-size" value="24" min="1" max="512">
+                            </div>
+                            <div class="control-group">
+                                <label for="arena-alloc-align">Alignment (Bytes)</label>
+                                <select id="arena-alloc-align">
+                                    <option value="1">1 (None)</option>
+                                    <option value="2">2</option>
+                                    <option value="4">4</option>
+                                    <option value="8" selected>8 (Default)</option>
+                                    <option value="16">16</option>
+                                    <option value="32">32</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="btn-group">
+                            <button class="btn btn-primary" id="arena-allocate-btn">
+                                <i class="fa-solid fa-arrow-down-long"></i> Allocate
+                            </button>
+                            <button class="btn btn-danger-outline" id="arena-reset-btn">
+                                <i class="fa-solid fa-trash-can"></i> Clear Arena
+                            </button>
+                        </div>
+
+                        <div class="status-metrics">
+                            <div class="metric">
+                                <span class="metric-label">Used Memory</span>
+                                <span class="metric-value" id="arena-used-val">0 B</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Free Memory</span>
+                                <span class="metric-value" id="arena-free-val">256 B</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Efficiency</span>
+                                <span class="metric-value" id="arena-eff-val">100%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualization Grid -->
+                    <div class="panel glass-panel visualizer-panel">
+                        <div class="panel-header">
+                            <h3><i class="fa-solid fa-border-all"></i> Physical Buffer Layout</h3>
+                            <div class="legend">
+                                <span class="legend-item"><span class="color-box free"></span> Free</span>
+                                <span class="legend-item"><span class="color-box allocated"></span> Allocated</span>
+                                <span class="legend-item"><span class="color-box padding"></span> Padding</span>
+                            </div>
+                        </div>
+                        
+                        <div class="arena-memory-map" id="arena-memory-map-grid">
+                            <!-- JS will generate memory block cells here -->
+                        </div>
+                        
+                        <div class="log-panel">
+                            <h4><i class="fa-solid fa-list-ul"></i> Allocation History</h4>
+                            <div class="log-entries" id="arena-log-entries">
+                                <div class="log-entry system-msg">Arena initialized with 256 bytes capacity.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Pool Simulator -->
+            <section class="tab-panel" id="pool-sim-panel">
+                <div class="grid-layout">
+                    <!-- Config & Controls -->
+                    <div class="panel glass-panel control-panel">
+                        <h3><i class="fa-solid fa-sliders"></i> Pool Configuration</h3>
+                        <div class="control-group">
+                            <label for="pool-buffer-size">Total Buffer Size (Bytes)</label>
+                            <input type="number" id="pool-buffer-size" value="256" min="64" max="1024" step="64">
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="pool-block-size">Block Size (Bytes)</label>
+                                <input type="number" id="pool-block-size" value="32" min="8" max="256" step="8">
+                            </div>
+                            <div class="control-group">
+                                <label for="pool-alignment">Alignment (Bytes)</label>
+                                <select id="pool-alignment">
+                                    <option value="4">4</option>
+                                    <option value="8" selected>8</option>
+                                    <option value="16">16</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary btn-full" id="pool-reconfig-btn">Apply Config & Reinit</button>
+                        
+                        <hr>
+                        
+                        <h3><i class="fa-solid fa-cubes"></i> Block Operations</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-primary" id="pool-allocate-btn">
+                                <i class="fa-solid fa-download"></i> Allocate Block
+                            </button>
+                            <button class="btn btn-danger-outline" id="pool-reset-btn">
+                                <i class="fa-solid fa-trash-can"></i> Reset Pool
+                            </button>
+                        </div>
+                        
+                        <div class="control-group margin-top">
+                            <label for="pool-dealloc-index">Deallocate Block (Index)</label>
+                            <div class="input-with-btn">
+                                <input type="number" id="pool-dealloc-index" value="0" min="0" max="7">
+                                <button class="btn btn-danger" id="pool-deallocate-btn">Deallocate</button>
+                            </div>
+                        </div>
+
+                        <div class="status-metrics">
+                            <div class="metric">
+                                <span class="metric-label">Allocated Blocks</span>
+                                <span class="metric-value" id="pool-allocated-val">0 / 8</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Actual Block Size</span>
+                                <span class="metric-value" id="pool-actual-size-val">32 B</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Free List Head</span>
+                                <span class="metric-value text-cyan" id="pool-head-val">Block 0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualization Grid -->
+                    <div class="panel glass-panel visualizer-panel">
+                        <div class="panel-header">
+                            <h3><i class="fa-solid fa-network-wired"></i> Intrusive Free List Visualization</h3>
+                            <div class="legend">
+                                <span class="legend-item"><span class="color-box free-block"></span> Free Block</span>
+                                <span class="legend-item"><span class="color-box allocated-block"></span> Allocated Block</span>
+                                <span class="legend-item"><i class="fa-solid fa-arrow-right text-cyan"></i> Next Free Pointer</span>
+                            </div>
+                        </div>
+                        
+                        <div class="pool-memory-map" id="pool-memory-map-grid">
+                            <!-- JS will generate memory block blocks here -->
+                        </div>
+                        
+                        <div class="log-panel">
+                            <h4><i class="fa-solid fa-list-ul"></i> Allocation History</h4>
+                            <div class="log-entries" id="pool-log-entries">
+                                <div class="log-entry system-msg">Pool initialized with 8 blocks of 32 bytes (aligned to 8 bytes).</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Benchmarks -->
+            <section class="tab-panel" id="benchmarks-panel">
+                <div class="panel glass-panel">
+                    <div class="bench-hero">
+                        <div class="bench-hero-text">
+                            <h3><i class="fa-solid fa-gauge-high"></i> High-Speed Web Benchmarks</h3>
+                            <p>Execute real-time microbenchmarks in your browser comparing custom allocator algorithms against the standard JavaScript Heap allocations.</p>
+                        </div>
+                        <button class="btn btn-primary btn-large" id="run-benchmarks-btn">
+                            <i class="fa-solid fa-play"></i> Run Live Benchmarks
+                        </button>
+                    </div>
+
+                    <div class="bench-results-grid">
+                        <!-- Arena Bench Card -->
+                        <div class="bench-card glass-panel">
+                            <div class="bench-card-header">
+                                <h4>Arena vs Standard Heap</h4>
+                                <span class="scenario-label">50,000 allocations per loop</span>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-row">
+                                    <span class="chart-label">Standard Heap</span>
+                                    <div class="bar-wrapper">
+                                        <div class="bar bar-std" id="arena-std-bar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="chart-time" id="arena-std-time">-- ms</span>
+                                </div>
+                                <div class="chart-row">
+                                    <span class="chart-label">Arena Allocator</span>
+                                    <div class="bar-wrapper">
+                                        <div class="bar bar-custom" id="arena-custom-bar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="chart-time" id="arena-custom-time">-- ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-display hide" id="arena-speedup-box">
+                                <span class="speedup-label">Arena Speedup</span>
+                                <span class="speedup-factor" id="arena-speedup-val">--x</span>
+                            </div>
+                        </div>
+
+                        <!-- Pool Bench Card -->
+                        <div class="bench-card glass-panel">
+                            <div class="bench-card-header">
+                                <h4>Pool vs Standard Heap</h4>
+                                <span class="scenario-label">100,000 blocks allocated & freed</span>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-row">
+                                    <span class="chart-label">Standard Heap</span>
+                                    <div class="bar-wrapper">
+                                        <div class="bar bar-std" id="pool-std-bar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="chart-time" id="pool-std-time">-- ms</span>
+                                </div>
+                                <div class="chart-row">
+                                    <span class="chart-label">Pool Allocator</span>
+                                    <div class="bar-wrapper">
+                                        <div class="bar bar-custom" id="pool-custom-bar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="chart-time" id="pool-custom-time">-- ms</span>
+                                </div>
+                            </div>
+                            <div class="speedup-display hide" id="pool-speedup-box">
+                                <span class="speedup-label">Pool Speedup</span>
+                                <span class="speedup-factor" id="pool-speedup-val">--x</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Code View -->
+            <section class="tab-panel" id="code-view-panel">
+                <div class="panel glass-panel code-explorer">
+                    <div class="code-explorer-header">
+                        <div class="file-selector">
+                            <label for="code-file-select"><i class="fa-solid fa-folder-open"></i> Select File:</label>
+                            <select id="code-file-select">
+                                <option value="ArenaAllocator.hpp" selected>ArenaAllocator.hpp (Linear bump allocator)</option>
+                                <option value="PoolAllocator.hpp">PoolAllocator.hpp (Fixed block allocator)</option>
+                                <option value="STLAdapter.hpp">STLAdapter.hpp (STL custom allocator adapter)</option>
+                                <option value="main.cpp">main.cpp (C++ benchmark code)</option>
+                            </select>
+                        </div>
+                        <span class="file-path-display" id="file-path-text">/d:/CPPProject/ArenaAllocator.hpp</span>
+                    </div>
+                    
+                    <div class="code-editor-container">
+                        <div class="line-numbers" id="code-line-numbers">
+                            <!-- Generated by JS -->
+                        </div>
+                        <pre class="code-display"><code id="code-content-area">// Loading code file...</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: C++ Sandbox -->
+            <section class="tab-panel" id="sandbox-panel">
+                <div class="grid-layout">
+                    <!-- Left: Code Editor & Controls -->
+                    <div class="panel glass-panel sandbox-editor-panel">
+                        <div class="panel-header">
+                            <h3><i class="fa-solid fa-keyboard"></i> Code Editor</h3>
+                            <div class="template-selector">
+                                <label for="sandbox-template-select">Load Template:</label>
+                                <select id="sandbox-template-select">
+                                    <option value="arena-basic">Arena Bump Allocation</option>
+                                    <option value="arena-alignment">Arena Dynamic Alignment</option>
+                                    <option value="pool-lifecycle">Pool Block Lifecycle</option>
+                                    <option value="custom-struct">Custom Struct Allocations</option>
+                                    <option value="custom" selected>Empty Sandbox</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="sandbox-editor-container">
+                            <textarea id="sandbox-textarea" spellcheck="false" placeholder="Write or paste your C++ allocator code here..."></textarea>
+                            <pre class="sandbox-highlighter"><code id="sandbox-highlight-area"></code></pre>
+                        </div>
+                        
+                        <div class="btn-group margin-top">
+                            <button class="btn btn-primary" id="sandbox-parse-btn">
+                                <i class="fa-solid fa-magnifying-glass"></i> Parse Allocations
+                            </button>
+                            <button class="btn btn-secondary" id="sandbox-clear-btn">
+                                <i class="fa-solid fa-eraser"></i> Clear Code
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Execution Steps Panel -->
+                    <div class="panel glass-panel sandbox-executor-panel">
+                        <div class="panel-header">
+                            <h3><i class="fa-solid fa-play"></i> Execution Queue</h3>
+                            <div class="playback-controls">
+                                <button class="btn btn-secondary btn-icon" id="sandbox-prev-btn" title="Previous Step" disabled>
+                                    <i class="fa-solid fa-backward-step"></i>
+                                </button>
+                                <button class="btn btn-primary btn-icon" id="sandbox-play-btn" title="Run Step-by-Step" disabled>
+                                    <i class="fa-solid fa-play"></i>
+                                </button>
+                                <button class="btn btn-secondary btn-icon" id="sandbox-next-btn" title="Next Step" disabled>
+                                    <i class="fa-solid fa-forward-step"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="execution-list-container" id="sandbox-execution-list">
+                            <div class="empty-execution-placeholder">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <p>Write code on the left and click <strong>Parse Allocations</strong> to populate the execution queue.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="status-metrics margin-top">
+                            <div class="metric">
+                                <span class="metric-label">Parsed Steps</span>
+                                <span class="metric-value" id="sandbox-total-steps-val">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Current Step</span>
+                                <span class="metric-value text-cyan" id="sandbox-current-step-val">-- / --</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="app.js?v=4"></script>
+</body>
+</html>
